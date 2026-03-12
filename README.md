@@ -97,8 +97,8 @@ Steps performed:
 
 ---
 
-##Training and Evaluation
--** Split**: 70% train, 15% val, 15% test (subject-wise).
+## Training and Evaluation
+- ** Split** : 70% train, 15% val, 15% test (subject-wise).
 ---
 ## Results and Visualizations
 | Metric | Value |
@@ -112,7 +112,7 @@ Steps performed:
 
 ## Random-Sample Inference
 - 20 random samples were tested post-training.
-- ![Random Accuracy](Test_random_data_wiith_latest_model/Screenshot 2026-03-13 034653.png) 
+- ![Random Accuracy](Test_random_data_wiith_latest_model/"Screenshot 2026-03-13 034653.png") 
 
 
 
