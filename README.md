@@ -22,10 +22,14 @@ This project aims to classify sleep stages from EEG signals using deep learning.
   - Validation loss = **0.3753**  
   - Test accuracy = **0.9167**
 - Confusion matrices and learning curves are included:
-- ![Learning curve (before)](assets/learning_curve_before.png)  
-- ![Confusion matrix (before)](assets/confusion_matrix_before.png)  
-- ![Learning curve (after)](assets/learning_curve_after.png)  
-- ![Confusion matrix (after)](assets/confusion_matrix_after.png)  
+### Learning curve (before)
+- ![Learning curve (before)](Before_Optimization/Images/training_curves.png)
+### Confusion matrix (before)
+- ![Confusion matrix (before)](Before_Optimization/Images/confusion_matrix.png)
+### Learning curve (after)
+- ![Learning curve (after)](After_optimization/Images/training_curves.png)
+### Confusion matrix (after)
+- ![Confusion matrix (after)](After_optimization/Images/confusion_matrix.png)  
 
 #### Additionally, **20 random test samples** were evaluated post-training and results are included.
 ---
