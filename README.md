@@ -98,7 +98,7 @@ Steps performed:
 ---
 
 ## Training and Evaluation
-- ** Split** : 70% train, 15% val, 15% test (subject-wise).
+- **Split**: 70% train, 15% val, 15% test (subject-wise).
 ---
 ## Results and Visualizations
 | Metric | Value |
