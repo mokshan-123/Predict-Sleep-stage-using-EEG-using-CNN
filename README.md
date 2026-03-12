@@ -86,7 +86,7 @@ Steps performed:
 - **Initial approach:** WeightedRandomSampler → biased predictions.(Because of the highly imbalance data set)
 - **Improved approach:** Downsampling majority class → balanced dataset.
   
-- ![Confusion matrix (after)](assets/confusion_matrix_after.png)  
+- ![Downsampling](After_optimization/Images/Downsampling.png)  
 ### Comparison of Balancing Strategies
 
 | Approach | Validation Acc | Test Acc | Comment |
@@ -112,7 +112,7 @@ Steps performed:
 
 ## Random-Sample Inference
 - 20 random samples were tested post-training.
-- ![Confusion matrix (after)](assets/confusion_matrix_after.png) 
+- ![Random Accuracy](Test_random_data_wiith_latest_model/Screenshot 2026-03-13 034653.png) 
 
 
 
