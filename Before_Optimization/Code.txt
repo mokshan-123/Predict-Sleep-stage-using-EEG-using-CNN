@@ -1,0 +1,562 @@
+import os
+import subprocess
+
+# Fix 1 - Remove tensorflow conflict
+subprocess.run(['pip', 'uninstall', '-y', 'tensorflow'], capture_output=True)
+subprocess.run(['pip', 'install', 'tensorflow-cpu', '--break-system-packages'], 
+               capture_output=True)
+
+# Fix 2 - Set TPU environment variables
+os.environ['PJRT_DEVICE'] = 'TPU'
+os.environ['XLA_USE_BF16'] = '1'
+os.environ['TPU_PROCESS_ADDRESSES'] = 'local'
+os.environ['CLOUD_TPU_TASK_ID'] = '0'
+os.environ['XLA_FLAGS'] = '--xla_dump_to=/tmp/xla_dumps'
+
+print("✅ Environment configured")
+
+# Verify TPU still accessible
+import torch_xla.core.xla_model as xm
+device = xm.xla_device()
+print(f"XLA Device: {device}")
+print(f"TPU Type: {xm.xla_device_hw(device)}")
+
+
+
+!pip install -q lightning torchmetrics patool
+
+
+
+
+import os
+import glob
+import numpy as np
+import torch
+import torch.nn as nn
+import lightning as L
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+from sklearn.metrics import f1_score, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tqdm import tqdm
+from torch.utils.data import Dataset
+import torch.nn as nn
+import torch.nn.functional as F
+import lightning as L
+from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score
+import patoolib
+
+
+
+# 1. Exact path found from your search results
+raw_path = "/kaggle/input/datasets/mok18976/eeg-sleep-recognition-dataset/processed_data"
+
+# 2. Setup the RAM-disk for normalized data (330GB capacity)
+norm_path = "/dev/shm/normalized_data/"
+os.makedirs(norm_path, exist_ok=True)
+
+# 3. Get all subject files
+all_x_files = sorted(glob.glob(os.path.join(raw_path, "*_X.npy")))
+
+if len(all_x_files) == 0:
+    print(f"❌ No files found at {raw_path}. Please double-check the folder name.")
+else:
+    print(f"✅ Found {len(all_x_files)} subjects. Starting Normalization in RAM...")
+
+    for x_file in tqdm(all_x_files):
+        # Load raw X and corresponding y
+        x_data = np.load(x_file).astype(np.float32)
+        y_file = x_file.replace("_X.npy", "_y.npy")
+        y_data = np.load(y_file)
+
+        # Apply Z-score Normalization (Mean 0, Std 1)
+        # axis=-1 processes the time dimension
+        mean = x_data.mean(axis=-1, keepdims=True)
+        std = x_data.std(axis=-1, keepdims=True)
+        x_norm = (x_data - mean) / (std + 1e-8)
+
+        # Save to the RAM folder
+        file_name = os.path.basename(x_file)
+        np.save(os.path.join(norm_path, file_name), x_norm)
+        np.save(os.path.join(norm_path, file_name.replace("_X.npy", "_y.npy")), y_data)
+
+    print(f"\n🚀 Done! Normalized data is ready in RAM: {norm_path}")
+
+
+
+
+
+# 1. Update the path to the RAM-disk
+folder_path = '/dev/shm/normalized_data/'
+
+# Check if the folder exists first
+if os.path.exists(folder_path):
+    # Count all files in the directory
+    all_files = os.listdir(folder_path)
+    total_count = len(all_files)
+
+    # Count specific types using your logic
+    x_files = [f for f in all_files if f.endswith('_X.npy')]
+    y_files = [f for f in all_files if f.endswith('_y.npy')]
+
+    print(f"--- Kaggle RAM-Disk Statistics ---")
+    print(f"Path: {folder_path}")
+    print(f"Total files: {total_count}")
+    print(f"X files (Data): {len(x_files)}")
+    print(f"y files (Labels): {len(y_files)}")
+
+    if len(x_files) == 153:
+        print("\n✅ Perfect! All 153 subjects are normalized in RAM.")
+    else:
+        print(f"\n⚠️ Warning: Found {len(x_files)} subjects instead of 153.")
+        print("Tip: Make sure your normalization loop finished without errors.")
+else:
+    print(f"❌ Error: Folder {folder_path} not found. Did you run the normalization cell?")
+
+
+
+
+
+def plot_from_disk(subject_idx=0, epoch_idx=100):
+    # CHANGED: Point to the Kaggle RAM-disk path
+    folder = '/dev/shm/normalized_data/' 
+    
+    # Get all X files
+    x_files = sorted([f for f in os.listdir(folder) if f.endswith('_X.npy')])
+    y_files = sorted([f for f in os.listdir(folder) if f.endswith('_y.npy')])
+
+    # Load the chosen subject
+    file_path = os.path.join(folder, x_files[subject_idx])
+    label_path = os.path.join(folder, y_files[subject_idx])
+
+    data = np.load(file_path)   # Shape: (Total Epochs, 2, 3000)
+    labels = np.load(label_path) # Shape: (Total Epochs,)
+
+    # Extract specific epoch and both electrodes
+    epoch_data = data[epoch_idx]
+    label = labels[epoch_idx]
+
+    # Time axis
+    time = np.linspace(0, 30, 3000)
+    stages = {0: 'Wake', 1: 'N1', 2: 'N2', 3: 'N3', 4: 'REM'}
+
+    # Plotting
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 7), sharex=True)
+
+    # Electrode 1: EEG
+    ax1.plot(time, epoch_data[0], color='blue', lw=0.7)
+    ax1.set_title(f"Subject: {x_files[subject_idx]} | Epoch: {epoch_idx} | Stage: {stages[label]}")
+    ax1.set_ylabel("EEG (Fpz-Cz) [Z-Score]")
+    ax1.grid(True, alpha=0.3)
+
+    # Electrode 2: EOG
+    ax2.plot(time, epoch_data[1], color='red', lw=0.7)
+    ax2.set_ylabel("EOG (horizontal) [Z-Score]")
+    ax2.set_xlabel("Time (seconds)")
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+# Run the function
+plot_from_disk(subject_idx=0, epoch_idx=500)
+
+
+
+
+
+
+# 1. Get all normalized X and y paths from the Kaggle RAM-disk
+# CHANGED: Pointing to /dev/shm/ instead of /content/
+all_x = sorted(glob.glob("/dev/shm/normalized_data/*_X.npy"))
+all_y = sorted(glob.glob("/dev/shm/normalized_data/*_y.npy"))
+
+# Verify we have all 153 subjects
+print(f"Total subjects found: {len(all_x)}")
+
+# 2. Define your exact split boundaries
+train_limit = 110
+val_limit = 110 + 20 # 130
+
+# 3. Slice the lists subject-wise
+train_x_paths = all_x[:train_limit]
+train_y_paths = all_y[:train_limit]
+
+val_x_paths = all_x[train_limit:val_limit]
+val_y_paths = all_y[train_limit:val_limit]
+
+test_x_paths = all_x[val_limit:]
+test_y_paths = all_y[val_limit:]
+
+print(f"--- Split Summary ---")
+print(f"Train: {len(train_x_paths)} subjects") # 110
+print(f"Val:   {len(val_x_paths)} subjects")   # 20
+print(f"Test:  {len(test_x_paths)} subjects")  # 23
+
+
+
+
+
+
+
+
+class SleepDataset(Dataset):
+    def __init__(self, x_paths, y_paths):
+        self.x_data = []
+        self.y_data = []
+        self.samples = []
+        self.all_labels = []
+
+        print("Preloading all data into memory...")
+        for f_idx, (x_p, y_p) in enumerate(tqdm(zip(x_paths, y_paths), total=len(x_paths))):
+            x = np.load(x_p).astype(np.float32)
+            y = np.load(y_p)
+            self.x_data.append(x)
+            self.y_data.append(y)
+            for e_idx, lbl in enumerate(y):
+                self.samples.append((f_idx, e_idx))
+                self.all_labels.append(lbl)
+        print(f"✅ Done. {len(self.samples)} samples loaded into memory.")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        f_idx, e_idx = self.samples[idx]
+        x = torch.from_numpy(self.x_data[f_idx][e_idx])
+        y = torch.tensor(self.y_data[f_idx][e_idx], dtype=torch.long)
+        return x, y
+
+train_ds = SleepDataset(train_x_paths, train_y_paths)
+val_ds   = SleepDataset(val_x_paths, val_y_paths)
+test_ds  = SleepDataset(test_x_paths, test_y_paths)
+print(f"✅ Datasets initialized. Total training epochs: {len(train_ds)}")
+
+
+
+
+
+def show_proportions(dataset, title="Dataset Distribution"):
+    labels = np.array(dataset.all_labels)
+    total = len(labels)
+
+    # Count occurrences (0=W, 1=N1, 2=N2, 3=N3, 4=R)
+    counts = np.bincount(labels)
+    stages = ['Wake', 'N1', 'N2', 'N3', 'REM']
+
+    print(f"--- {title} ---")
+    for i, count in enumerate(counts):
+        percent = (count / total) * 100
+        # Check to ensure we don't index out of bounds if stages are missing
+        stage_name = stages[i] if i < len(stages) else f"Stage {i}"
+        print(f"{stage_name:<5}: {count:<6} samples ({percent:>5.2f}%)")
+
+    # Visualization
+    plt.figure(figsize=(8, 5))
+    colors = ['#ff9999','#66b3ff','#99ff99','#ffcc99', '#c2c2f0']
+    
+    # We use counts[:len(stages)] to match the labels provided
+    plt.pie(counts, labels=stages[:len(counts)], autopct='%1.1f%%', startangle=140, colors=colors)
+    plt.title(title)
+    plt.show()
+
+# Check your 110 Training Subjects on Kaggle
+show_proportions(train_ds, "Training Set (110 Subjects)")
+
+
+
+
+
+import random
+def physical_downsample(dataset, wake_keep_ratio=0.15):
+    """
+    Physically removes a portion of Wake samples from the dataset index.
+    """
+    new_samples = []
+    new_labels = []
+
+    # Use a fixed seed so your results are reproducible
+    random.seed(42)
+
+    for i in range(len(dataset.samples)):
+        f_idx, e_idx = dataset.samples[i]
+        label = dataset.all_labels[i]
+
+        if label == 0:  # Wake Stage
+            if random.random() < wake_keep_ratio:
+                new_samples.append((f_idx, e_idx))
+                new_labels.append(label)
+        else:
+            # Keep 100% of all other stages (N1, N2, N3, REM)
+            new_samples.append((f_idx, e_idx))
+            new_labels.append(label)
+
+    # Update the dataset with the filtered lists
+    dataset.samples = new_samples
+    dataset.all_labels = new_labels
+
+    print(f"✅ Downsampling Complete!")
+    print(f"New total training samples: {len(dataset.samples)}")
+
+# Apply to training only on Kaggle
+physical_downsample(train_ds, wake_keep_ratio=0.15)
+
+# Verify the new distribution
+show_proportions(train_ds, "Training Set After Downsampling")
+
+
+
+
+
+
+
+
+# Verification block for Kaggle
+print(f"Total training epochs (After Downsampling): {len(train_ds)}")
+print(f"Total validation epochs: {len(val_ds)}")
+print(f"Total test epochs: {len(test_ds)}")
+
+# Check a single sample shape to ensure everything is loaded from /dev/shm/ correctly
+sample_x, sample_y = train_ds[0]
+print(f"Input shape: {sample_x.shape}") # Should be (2, 3000)
+print(f"Label: {sample_y}")
+
+
+
+
+
+
+
+
+from torch.utils.data import DataLoader
+
+train_loader = DataLoader(
+    train_ds,
+    batch_size=1024,
+    shuffle=True,
+    num_workers=2,
+    pin_memory=False,
+)
+
+val_loader = DataLoader(val_ds, batch_size=256, shuffle=False, 
+                        num_workers=2)
+test_loader = DataLoader(test_ds, batch_size=256, shuffle=False, 
+                         num_workers=2)
+print(f"✅ DataLoaders ready!")
+print(f"Training on {len(train_ds)} balanced samples.")
+print(f"Batch size:")
+
+
+
+
+
+
+
+# Final Sanity Check for Kaggle TPU
+import numpy as np
+
+# Grab one batch from the RAM-disk via the DataLoader
+images, labels = next(iter(train_loader))
+
+# Calculate the distribution in this specific batch
+unique, counts = np.unique(labels.numpy(), return_counts=True)
+stages = {0: 'Wake', 1: 'N1', 2: 'N2', 3: 'N3', 4: 'REM'}
+
+print(f"--- Batch Verification (Size: {images.shape[0]}) ---")
+for val, count in zip(unique, counts):
+    print(f"{stages[val]:<5}: {count} samples")
+
+print(f"\n✅ Input Tensor Shape: {images.shape}") # Should be [1024, 2, 3000]
+print(f"✅ Label Tensor Shape: {labels.shape}") # Should be [1024]
+
+
+
+
+
+# Compute from your post-downsampling counts
+# [Wake, N1, N2, N3, REM]
+class_counts = torch.tensor([31295, 13174, 49574, 10702, 19026], dtype=torch.float32)
+class_weights = 1.0 / class_counts
+class_weights = class_weights / class_weights.sum()  # Normalize
+
+
+
+
+
+
+class SleepStageCNN_LSTM(L.LightningModule):
+    def __init__(self, learning_rate=1e-3):
+        super().__init__()
+        self.save_hyperparameters()
+
+        # 1. CNN Feature Extractor
+        # Input shape: (Batch, 2 Channels, 3000 Samples)
+        self.features = nn.Sequential(
+            # First layer looks for broad patterns
+            nn.Conv1d(2, 64, kernel_size=50, stride=5),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=8),
+
+            # Second layer looks for more complex combinations
+            nn.Conv1d(64, 128, kernel_size=8, stride=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=4),
+
+            # Third layer compresses the features
+            nn.Conv1d(128, 128, kernel_size=3, stride=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+        )
+
+        # 2. LSTM for temporal context
+        # We treat the 128 features as a single time-step vector
+        self.lstm = nn.LSTM(input_size=128, hidden_size=128, 
+                            num_layers=2, batch_first=True, dropout=0.3)
+        # 3. Output Classifier
+        self.dropout = nn.Dropout(0.5)
+        self.classifier = nn.Linear(128, 5) # 5 Classes: W, N1, N2, N3, REM
+
+        # Metrics
+        self.val_f1 = MulticlassF1Score(num_classes=5, average='macro')
+        self.val_acc = MulticlassAccuracy(num_classes=5)
+
+    def forward(self, x):
+        # CNN: (Batch, 2, 3000) -> (Batch, 128)
+        x = self.features(x)
+
+        # Transpose for LSTM: (Batch, T, 128)
+        x = x.permute(0, 2, 1)
+
+        # LSTM processes the sequence, take the last hidden state
+        out, (hn, cn) = self.lstm(x)
+        x = hn[-1]  # Last hidden state, XLA-friendly
+
+        x = self.dropout(x)
+        
+        return self.classifier(x)
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        logits = self(x)
+        weights = class_weights.to(x.device)  # Move to TPU/GPU
+        loss = F.cross_entropy(logits, y, weight=weights)
+        self.log("train_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        logits = self(x)
+        loss = F.cross_entropy(logits, y)
+
+        # Log F1 and Accuracy
+        self.log_dict({
+            "val_loss": loss,
+            "val_f1": self.val_f1(logits, y),
+            "val_acc": self.val_acc(logits, y)
+        }, prog_bar=True)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=9,       # Match your max_epochs
+            eta_min=1e-5   # Minimum LR it decays to
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "epoch"
+            }
+        }
+    
+# Initialize the model
+model = SleepStageCNN_LSTM()
+
+
+
+
+
+
+
+
+
+
+import lightning as L
+from lightning.pytorch.callbacks import ModelCheckpoint
+
+# 1. Setup Model Checkpointing 
+# This saves the BEST version of your model based on Validation F1 Score
+checkpoint_callback = ModelCheckpoint(
+    dirpath="/kaggle/working/checkpoints",
+    filename="best_sleep_model-{epoch:02d}-{val_f1:.2f}",
+    save_top_k=1,
+    mode="max",
+    monitor="val_f1"
+)
+
+# 2. Initialize the Trainer for Kaggle's TPU VM v3-8
+trainer = L.Trainer(
+    accelerator="tpu",
+    devices=1,
+    strategy="auto",           # Best for Kaggle's current TPU state
+    max_epochs=9,
+    precision="bf16-true",
+    logger=False,  
+    callbacks=[checkpoint_callback],
+    default_root_dir="/kaggle/working/",
+    log_every_n_steps=50,
+    check_val_every_n_epoch=2,  # Only validate every 2 epochs
+    num_sanity_val_steps=0,
+)
+
+# 3. KICK OFF THE 9-HOUR TRAINING
+# Make sure your train_loader and val_loader are initialized from the previous steps
+print("Launching training on 8 TPU cores.")
+trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+# 4. FINAL PERMANENT SAVE
+# This ensures your final weights are easily accessible in the 'Output' tab
+final_save_path = "/kaggle/working/final_sleep_stage_model.ckpt"
+trainer.save_checkpoint(final_save_path)
+print(f"✅ Training complete. Model saved to: {final_save_path}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
