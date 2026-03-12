@@ -68,12 +68,13 @@ Steps performed:
 ## Model Architecture and Parameters
 **Model type:** 1D-CNN with Squeeze-and-Excitation (SE) blocks.
 
-Layer,Type,Channels / Units,Kernel / Stride,Activation,Dropout,BatchNorm,Pooling,Output Shape
-Block 1,Conv1d + SE,64,"k=7, s=1",ReLU,-,Yes,MaxPool(4),"(B,64,T/4)"
-Block 2,Conv1d + SE,128,"k=5, s=1",ReLU,-,Yes,MaxPool(4),"(B,128,T/16)"
-Block 3,Conv1d + SE,256,"k=3, dil=2",ReLU,-,Yes,None,"(B,256,T/16)"
-Global,AdaptiveAvgPool1d,-,-,-,-,-,-,"(B,256,1)"
-FC,Linear,128 → 5,-,ReLU,0.5 / 0.4,-,-,"(B,5)"
+| Layer | Type | Channels / Units | Kernel / Stride | Activation | Dropout | BatchNorm | Pooling | Output Shape |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Block 1** | Conv1d + SE | 64 | k=7, s=1 | ReLU | - | Yes | MaxPool(4) | (B, 64, T/4) |
+| **Block 2** | Conv1d + SE | 128 | k=5, s=1 | ReLU | - | Yes | MaxPool(4) | (B, 128, T/16) |
+| **Block 3** | Conv1d + SE | 256 | k=3, dil=2 | ReLU | - | Yes | None | (B, 256, T/16) |
+| **Global** | AdaptiveAvgPool1d | - | - | - | - | - | - | (B, 256, 1) |
+| **FC** | Linear | 128 → 5 | - | ReLU | 0.5 / 0.4 | - | - | (B, 5) |
 
 - Loss: CrossEntropyLoss.
 - Optimizer: Adam (lr=1e-3, weight_decay=1e-4).
