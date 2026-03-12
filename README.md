@@ -27,7 +27,7 @@ This project aims to classify sleep stages from EEG signals using deep learning.
 - ![Learning curve (after)](assets/learning_curve_after.png)  
 - ![Confusion matrix (after)](assets/confusion_matrix_after.png)  
 
-Additionally, **20 random test samples** were evaluated post-training and results are included.
+#### Additionally, **20 random test samples** were evaluated post-training and results are included.
 ---
 
 ## Dataset
