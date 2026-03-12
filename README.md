@@ -112,7 +112,7 @@ Steps performed:
 
 ## Random-Sample Inference
 - 20 random samples were tested post-training.
-- ![Random 20](Test_random_data_wiith_latest_model/Screenshot 2026-03-13 034653.png)  
+- ![Random 20](Test_random_data_wiith_latest_model/random20.png)  
 
 
 
