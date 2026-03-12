@@ -12,11 +12,6 @@ This project aims to classify sleep stages from EEG signals using deep learning.
 6. [Training and Evaluation](#training-and-evaluation)  
 7. [Results and Visualizations](#results-and-visualizations)  
 8. [Random-Sample Inference](#random-sample-inference)  
-9. [Repo Layout](#repo-layout)  
-10. [How to Reproduce](#how-to-reproduce)  
-11. [Notes, Limitations and Next Steps](#notes-limitations-and-next-steps)  
-12. [Contribution, License and Contact](#contribution-license-and-contact)  
-13. [Appendices](#appendices)  
 
 ---
 ## Highlights / Key Results
@@ -33,7 +28,6 @@ Confusion matrices and learning curves are included:
 - ![Confusion matrix (after)](assets/confusion_matrix_after.png)  
 
 Additionally, **20 random test samples** were evaluated post-training and results are included.
-- ![Confusion matrix (after)](assets/confusion_matrix_after.png) 
 ---
 
 ## Dataset
@@ -76,6 +70,7 @@ Steps performed:
 | **Global** | AdaptiveAvgPool1d | - | - | - | - | - | - | (B, 256, 1) |
 | **FC** | Linear | 128 → 5 | - | ReLU | 0.5 / 0.4 | - | - | (B, 5) |
 
+- Total Parameters: ~1,192,261
 - Loss: CrossEntropyLoss.
 - Optimizer: Adam (lr=1e-3, weight_decay=1e-4).
 - Batch size: 64.
@@ -83,16 +78,37 @@ Steps performed:
 - Seed: 42.
 
 ---
+## Handling Class Imbalance
+- **Initial approach:** WeightedRandomSampler → biased predictions.(Because of the highly imbalance data set)
+- **Improved approach:** Downsampling majority class → balanced dataset.
+  
+- ![Confusion matrix (after)](assets/confusion_matrix_after.png)  
+### Comparison of Balancing Strategies
+
+| Approach | Validation Acc | Test Acc | Comment |
+| :--- | :--- | :--- | :--- |
+| **WeightedRandomSampler** | ~0.85 | ~0.85 | Biased towards majority |
+| **Downsampling** | **0.8904** | **0.9167** | Mostly Balanced, improved |
 
 
+---
 
+##Training and Evaluation
+-** Split**: 70% train, 15% val, 15% test (subject-wise).
+---
+## Results and Visualizations
+| Metric | Value |
+| :--- | :--- | 
+| Training Loss | 0.3264 |
+| Val Loss | 0.3753 |
+| Val Acc | 0.8904 |
+| Test Acc | 0.9167 |
 
+- confusion matrices and learning curvers are already added.
 
-
-
-
-
-
+## Random-Sample Inference
+- 20 random samples were tested post-training.
+- ![Confusion matrix (after)](assets/confusion_matrix_after.png) 
 
 
 
